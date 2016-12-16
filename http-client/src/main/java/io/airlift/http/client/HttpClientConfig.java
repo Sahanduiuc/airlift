@@ -53,6 +53,9 @@ public class HttpClientConfig
     private String trustStorePath = System.getProperty(JAVAX_NET_SSL_TRUST_STORE);
     private String trustStorePassword = System.getProperty(JAVAX_NET_SSL_TRUST_STORE_PASSWORD);
     private boolean authenticationEnabled;
+    private boolean hostnameVerificationEnabled = true;
+    private String basicAuthUser;
+    private String basicAuthPass;
     private String kerberosPrincipal;
     private String kerberosRemoteServiceName;
 
@@ -248,6 +251,42 @@ public class HttpClientConfig
     public HttpClientConfig setAuthenticationEnabled(boolean enabled)
     {
         this.authenticationEnabled = enabled;
+        return this;
+    }
+
+    public boolean getHostnameVerificationEnabled() { return hostnameVerificationEnabled; }
+
+    @Config("http-client.hostname-verification.enabled")
+    @ConfigDescription("Enable hostname verification of ssl certs")
+    public HttpClientConfig setHostnameVerificationEnabled(boolean enabled)
+    {
+        this.hostnameVerificationEnabled = enabled;
+        return this;
+    }
+
+    public String getBasicAuthUser()
+    {
+        return basicAuthUser;
+    }
+
+    @Config("http-client.authentication.basic-auth.user")
+    @ConfigDescription("Set http auth username")
+    public HttpClientConfig setBasicAuthUser(String user)
+    {
+        this.basicAuthUser = user;
+        return this;
+    }
+
+    public String getBasicAuthPass()
+    {
+        return basicAuthPass;
+    }
+
+    @Config("http-client.authentication.basic-auth.pass")
+    @ConfigDescription("Set http auth password")
+    public HttpClientConfig setBasicAuthPass(String pass)
+    {
+        this.basicAuthPass = pass;
         return this;
     }
 

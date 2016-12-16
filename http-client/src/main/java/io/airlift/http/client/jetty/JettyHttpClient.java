@@ -30,10 +30,12 @@ import io.airlift.units.Duration;
 import org.eclipse.jetty.client.DuplexConnectionPool;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpClientTransport;
+import org.eclipse.jetty.client.HttpConversation;
 import org.eclipse.jetty.client.HttpExchange;
 import org.eclipse.jetty.client.HttpRequest;
 import org.eclipse.jetty.client.PoolingHttpDestination;
 import org.eclipse.jetty.client.Socks4Proxy;
+import org.eclipse.jetty.client.api.Authentication;
 import org.eclipse.jetty.client.api.AuthenticationStore;
 import org.eclipse.jetty.client.api.ContentProvider;
 import org.eclipse.jetty.client.api.Destination;
@@ -42,6 +44,7 @@ import org.eclipse.jetty.client.api.Response.Listener;
 import org.eclipse.jetty.client.api.Result;
 import org.eclipse.jetty.client.http.HttpClientTransportOverHTTP;
 import org.eclipse.jetty.client.http.HttpConnectionOverHTTP;
+import org.eclipse.jetty.client.util.BasicAuthentication;
 import org.eclipse.jetty.client.util.BytesContentProvider;
 import org.eclipse.jetty.client.util.InputStreamResponseListener;
 import org.eclipse.jetty.client.util.PathContentProvider;
@@ -97,6 +100,7 @@ import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static org.eclipse.jetty.client.api.Authentication.ANY_REALM;
 
 public class JettyHttpClient
         implements io.airlift.http.client.HttpClient
@@ -170,7 +174,12 @@ public class JettyHttpClient
         creationLocation.fillInStackTrace();
 
         SslContextFactory sslContextFactory = new SslContextFactory();
-        sslContextFactory.setEndpointIdentificationAlgorithm("HTTPS");
+        if (config.getHostnameVerificationEnabled()) {
+            sslContextFactory.setEndpointIdentificationAlgorithm("HTTPS");
+        }
+        else {
+            sslContextFactory.setEndpointIdentificationAlgorithm(null);
+        }
         if (config.getKeyStorePath() != null) {
             sslContextFactory.setKeyStorePath(config.getKeyStorePath());
             sslContextFactory.setKeyStorePassword(config.getKeyStorePassword());
@@ -190,13 +199,50 @@ public class JettyHttpClient
             transport = new HttpClientTransportOverHTTP(CLIENT_TRANSPORT_SELECTORS);
         }
 
-        if (authenticationEnabled) {
+        if (authenticationEnabled && config.getBasicAuthUser() == null && config.getBasicAuthPass() == null) {
             requireNonNull(kerberosConfig.getConfig(), "kerberos config path is null");
             requireNonNull(config.getKerberosRemoteServiceName(), "kerberos remote service name is null");
             httpClient = new SpnegoHttpClient(kerberosConfig, config, transport, sslContextFactory);
         }
         else {
-            httpClient = new HttpClient(transport, sslContextFactory);
+            httpClient = new HttpClient(transport, sslContextFactory) {
+                protected HttpRequest newHttpRequest(HttpConversation conversation, URI uri)
+                {
+                    HttpRequest request = super.newHttpRequest(conversation, uri);
+
+                    // Hack to preemptively authorize requests because we don't appear to retry
+                    Authentication auth = getAuthenticationStore().findAuthentication("Basic", uri, ANY_REALM);
+                    if (auth != null) {
+                        Authentication.HeaderInfo headerInfo = new Authentication.HeaderInfo(
+                                null, null, null, HttpHeader.AUTHORIZATION
+                        );
+                        Authentication.Result authResult = auth.authenticate(request, null, headerInfo, null);
+                        authResult.apply(request);
+                    }
+                    return request;
+                }
+            };
+
+            if (authenticationEnabled) {
+                Authentication auth =  new BasicAuthentication(null, ANY_REALM,
+                        config.getBasicAuthUser(), config.getBasicAuthPass())
+                {
+                    @Override
+                    public boolean matches(String type, URI uri, String realm)
+                    {
+                        if (!getType().equalsIgnoreCase(type))
+                            return false;
+
+                        if (!getRealm().equals(ANY_REALM) && !getRealm().equals(realm))
+                            return false;
+
+                        return true;
+                    }
+                };
+                AuthenticationStore store = httpClient.getAuthenticationStore();
+                store.clearAuthentications();
+                store.addAuthentication(auth);
+            }
         }
 
         httpClient.setMaxConnectionsPerDestination(config.getMaxConnectionsPerServer());
