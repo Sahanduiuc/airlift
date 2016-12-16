@@ -56,7 +56,10 @@ public class TestHttpClientConfig
                 .setTrustStorePassword(System.getProperty(JAVAX_NET_SSL_TRUST_STORE_PASSWORD))
                 .setAuthenticationEnabled(false)
                 .setKerberosRemoteServiceName(null)
-                .setKerberosPrincipal(null));
+                .setKerberosPrincipal(null)
+                .setBasicAuthUser(null)
+                .setBasicAuthPass(null)
+                .setHostnameVerificationEnabled(true));
     }
 
     @Test
@@ -80,6 +83,9 @@ public class TestHttpClientConfig
                 .put("http-client.authentication.enabled", "true")
                 .put("http-client.authentication.krb5.remote-service-name", "airlift")
                 .put("http-client.authentication.krb5.principal", "airlift-client")
+                .put("http-client.hostname-verification.enabled", "false")
+                .put("http-client.authentication.basic-auth.user", "auth-user-foo")
+                .put("http-client.authentication.basic-auth.pass", "auth-pass-bar")
                 .build();
 
         HttpClientConfig expected = new HttpClientConfig()
@@ -99,7 +105,11 @@ public class TestHttpClientConfig
                 .setTrustStorePassword("trust-store-password")
                 .setAuthenticationEnabled(true)
                 .setKerberosRemoteServiceName("airlift")
-                .setKerberosPrincipal("airlift-client");
+                .setKerberosPrincipal("airlift-client")
+                .setBasicAuthUser("auth-user-foo")
+                .setBasicAuthPass("auth-pass-bar")
+                .setHostnameVerificationEnabled(false);
+        ;
 
         ConfigAssertions.assertFullMapping(properties, expected);
     }
