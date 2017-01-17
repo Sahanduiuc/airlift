@@ -199,7 +199,7 @@ public class JettyHttpClient
             transport = new HttpClientTransportOverHTTP(CLIENT_TRANSPORT_SELECTORS);
         }
 
-        if (authenticationEnabled && config.getBasicAuthUser() == null && config.getBasicAuthPass() == null) {
+        if (authenticationEnabled && (config.getBasicAuthUser() == null || config.getBasicAuthPass() == null)) {
             requireNonNull(kerberosConfig.getConfig(), "kerberos config path is null");
             requireNonNull(config.getKerberosRemoteServiceName(), "kerberos remote service name is null");
             httpClient = new SpnegoHttpClient(kerberosConfig, config, transport, sslContextFactory);
